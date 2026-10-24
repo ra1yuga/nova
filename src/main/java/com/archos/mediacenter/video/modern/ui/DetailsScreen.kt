@@ -59,8 +59,11 @@ fun ShowDetailScreen(
     actions: NovaActions,
     onBack: () -> Unit,
 ) {
+    var failed by remember(showId, version) { mutableStateOf(false) }
     val loaded by produceState<Pair<ShowDetails, Map<Int, List<EpisodeRow>>>?>(initialValue = null, showId, version) {
-        value = repo.showDetails(showId)
+        val result = repo.showDetails(showId)
+        if (result == null) failed = true
+        value = result ?: value
     }
     var chosenSeason by rememberSaveable(showId) { mutableIntStateOf(Int.MIN_VALUE) }
     var pinnedOverride by remember(showId, version) { mutableStateOf<Boolean?>(null) }
@@ -70,7 +73,15 @@ fun ShowDetailScreen(
     Box(Modifier.fillMaxSize().background(Nova.Black)) {
         val pair = loaded
         if (pair == null) {
-            LoadingIndicator()
+            if (failed) {
+                EmptyState(
+                    title = "Couldn't open this show",
+                    body = "Nova's library didn't return its details. If it keeps happening, share the problem report from the Home menu.",
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            } else {
+                LoadingIndicator()
+            }
         } else {
             val (d, episodesBySeason) = pair
             val seasonNumbers = d.seasons.map { it.number }

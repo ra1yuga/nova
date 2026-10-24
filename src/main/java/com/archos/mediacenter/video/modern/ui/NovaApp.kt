@@ -61,6 +61,8 @@ interface NovaActions {
     fun setPinned(item: Base, pinned: Boolean)
     fun playFile(file: Any)
     fun rememberSearch(query: String)
+    fun hasProblemReport(): Boolean
+    fun shareProblemReport()
     fun recentSearches(): List<String>
 }
 

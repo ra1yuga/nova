@@ -144,6 +144,13 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Nova Modern: keeps crash details so they can be shown and shared on the next launch -->
+        <provider
+            android:name=".modern.CrashCatcherProvider"
+            android:authorities="${applicationId}.crashcatcher"
+            android:exported="false"
+            android:initOrder="9999" />
+
         <activity
             android:name=".browser.MainActivity"
             android:configChanges="keyboard|keyboardHidden"

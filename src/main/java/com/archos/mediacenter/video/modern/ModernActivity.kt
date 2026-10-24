@@ -3,12 +3,20 @@
 package com.archos.mediacenter.video.modern
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.util.Log
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -42,22 +50,34 @@ class ModernActivity : AppCompatActivity(), NovaActions {
     private lateinit var permissionChecker: PermissionChecker
     private lateinit var repo: LibraryRepository
     private var resumedOnce = false
+    private var showingCrash = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        CrashCatcher.install(this)
         (application as CustomApplication).loadLocale()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        permissionChecker = PermissionChecker(FileUtils.hasManageExternalStoragePermission(applicationContext))
+        repo = LibraryRepository(applicationContext)
+        repo.onProblem = { where, e -> CrashCatcher.recordProblem(applicationContext, where, e) }
+
+        val crash = CrashCatcher.pendingCrash(this)
+        if (crash != null) {
+            showCrashReport(crash)
+            return
+        }
+        startApp()
+    }
+
+    private fun startApp() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         // same start-up bookkeeping as Nova's phone and TV interfaces
         prefs.edit().putBoolean("user_paused_video", false).apply()
         LoaderUtils.mMustHideWatchedVideo = prefs.getBoolean("hide_watched", false)
         LoaderUtils.mSmartRecentlyRows = prefs.getBoolean("smart_recently_rows", false)
 
-        permissionChecker = PermissionChecker(FileUtils.hasManageExternalStoragePermission(applicationContext))
         AutoScrapeService.registerObserver(this)
-
-        repo = LibraryRepository(applicationContext)
         repo.start()
 
         setContent {
@@ -67,8 +87,73 @@ class ModernActivity : AppCompatActivity(), NovaActions {
         }
     }
 
+    /** Plain Android views on purpose: this must work even if the Compose UI is what crashed. */
+    private fun showCrashReport(report: String) {
+        showingCrash = true
+        val d = resources.displayMetrics.density
+        fun px(v: Int) = (v * d).toInt()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+            fitsSystemWindows = true
+            setPadding(px(16), px(16), px(16), px(16))
+        }
+        root.addView(TextView(this).apply {
+            text = "Nova Modern closed unexpectedly last time"
+            setTextColor(Color.WHITE)
+            textSize = 20f
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        root.addView(TextView(this).apply {
+            text = "Copy or share this report and send it to Claude so the problem can be fixed."
+            setTextColor(Color.rgb(0xA3, 0xA0, 0x9A))
+            textSize = 14f
+            setPadding(0, px(6), 0, px(12))
+        })
+        val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun button(label: String, onClick: () -> Unit) = Button(this).apply {
+            text = label
+            isAllCaps = false
+            setOnClickListener { onClick() }
+            buttons.addView(this, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = px(8) })
+        }
+        button("Copy") { copyText("Nova Modern crash report", report) }
+        button("Share") { shareText(report) }
+        button("Continue") {
+            CrashCatcher.clearCrash(this)
+            recreate()
+        }
+        root.addView(buttons)
+        val scroll = ScrollView(this).apply { setPadding(0, px(12), 0, 0) }
+        scroll.addView(TextView(this).apply {
+            text = report
+            setTextColor(Color.rgb(0xF4, 0xF1, 0xEA))
+            textSize = 11f
+            typeface = Typeface.MONOSPACE
+            setTextIsSelectable(true)
+        })
+        root.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        setContentView(root)
+    }
+
+    private fun copyText(label: String, text: String) {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText(label, text))
+        Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun shareText(text: String) {
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+        try {
+            startActivity(Intent.createChooser(send, "Share report"))
+        } catch (e: ActivityNotFoundException) {
+            copyText("Nova Modern report", text)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        if (showingCrash) return
         (application as CustomApplication).loadLocale()
         permissionChecker.checkAndRequestPermission(this)
         // back from the player or another screen: pick up new resume points right away
@@ -77,7 +162,7 @@ class ModernActivity : AppCompatActivity(), NovaActions {
     }
 
     override fun onDestroy() {
-        repo.stop()
+        if (::repo.isInitialized) repo.stop()
         super.onDestroy()
     }
 
@@ -183,6 +268,14 @@ class ModernActivity : AppCompatActivity(), NovaActions {
         val f = file as? MetaFile2 ?: return
         val video = NonIndexedVideo(f.streamingUri, f.uri, f.name, null)
         PlayUtils.startVideo(this, video, PlayerActivity.RESUME_FROM_LAST_POS, false, -1, null, -1L)
+    }
+
+    override fun hasProblemReport(): Boolean = CrashCatcher.problems(this) != null
+
+    override fun shareProblemReport() {
+        val text = CrashCatcher.problems(this) ?: return
+        shareText(text)
+        CrashCatcher.clearProblems(this)
     }
 
     override fun rememberSearch(query: String) {

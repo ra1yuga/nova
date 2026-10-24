@@ -7,6 +7,7 @@ import android.database.ContentObserver
 import android.database.Cursor
 import android.net.Uri
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
 import androidx.loader.content.CursorLoader
@@ -30,14 +31,37 @@ import com.archos.mediaprovider.video.VideoStore
 import com.archos.mediascraper.BaseTags
 import com.archos.mediascraper.ScraperImage
 import com.archos.mediascraper.VideoTags
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.android.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
+/**
+ * Nova's loaders create Handlers (update throttle, content observer) in their constructors, so they
+ * must be built on a thread that has a Looper. All library work runs on this one background thread.
+ */
+private object LibraryThread {
+    private val thread = HandlerThread("NovaModernLibrary").apply { start() }
+    val dispatcher = Handler(thread.looper).asCoroutineDispatcher("NovaModernLibrary")
+}
+
 class LibraryRepository(private val context: Context) {
+
+    /** Called (on the library thread) when a load fails, so the problem can be reported. */
+    var onProblem: (String, Throwable) -> Unit = { _, _ -> }
+
+    private suspend fun <T> onLibrary(where: String, fallback: () -> T, block: () -> T): T =
+        withContext(LibraryThread.dispatcher) {
+            try {
+                block()
+            } catch (e: Exception) {
+                Log.w(TAG, "$where failed", e)
+                try { onProblem(where, e) } catch (_: Exception) { }
+                fallback()
+            }
+        }
 
     private val _version = MutableStateFlow(0)
 
@@ -269,7 +293,7 @@ class LibraryRepository(private val context: Context) {
 
     // ---------------------------------------------------------------- home
 
-    suspend fun home(): HomeData = withContext(Dispatchers.IO) {
+    suspend fun home(): HomeData = onLibrary("Loading Home", { HomeData(null, emptyList(), true) }) {
         val continueWatching = readVideos(WatchingUpNextLoader(context), detailed = true, limit = 20)
             .map { (v, e) -> itemOf(v, e) }
             .map { item ->
@@ -395,8 +419,8 @@ class LibraryRepository(private val context: Context) {
         return ep to resumeLabel(ep)
     }
 
-    suspend fun showDetails(showId: Long): Pair<ShowDetails, Map<Int, List<EpisodeRow>>>? = withContext(Dispatchers.IO) {
-        val show = loadShow(showId) ?: return@withContext null
+    suspend fun showDetails(showId: Long): Pair<ShowDetails, Map<Int, List<EpisodeRow>>>? = onLibrary("Loading show $showId", { null }) {
+        val show = loadShow(showId) ?: return@onLibrary null
         val tags = tagsOf(show)
         val episodes = allEpisodes(showId)
         val bySeason = episodes.groupBy { it.seasonNumber }.toSortedMap(compareBy<Int> { if (it == 0) Int.MAX_VALUE else it })
@@ -450,12 +474,16 @@ class LibraryRepository(private val context: Context) {
 
     // ---------------------------------------------------------------- movies
 
-    suspend fun movieDetails(original: Movie): MovieDetails = withContext(Dispatchers.IO) {
-        // re-read so resume point / watched state are current after coming back from the player
-        val movie = (readVideos(SingleVideoLoader(context, original.id), detailed = true).firstOrNull()?.first as? Movie) ?: original
-        val tags = tagsOf(movie)
+    suspend fun movieDetails(original: Movie): MovieDetails =
+        onLibrary("Loading movie ${original.id}", { movieDetailsOf(original, null) }) {
+            // re-read so resume point / watched state are current after coming back from the player
+            val movie = (readVideos(SingleVideoLoader(context, original.id), detailed = true).firstOrNull()?.first as? Movie) ?: original
+            movieDetailsOf(movie, tagsOf(movie))
+        }
+
+    private fun movieDetailsOf(movie: Movie, tags: BaseTags?): MovieDetails {
         val genres = (tags as? VideoTags)?.genres.orEmpty()
-        MovieDetails(
+        return MovieDetails(
             movie = movie,
             title = movie.name ?: "",
             year = movie.year,
@@ -479,19 +507,19 @@ class LibraryRepository(private val context: Context) {
 
     // ---------------------------------------------------------------- library grids
 
-    suspend fun allMovies(): List<MediaItem> = withContext(Dispatchers.IO) {
+    suspend fun allMovies(): List<MediaItem> = onLibrary("Loading movies", { emptyList() }) {
         readVideos(MoviesLoader(context, true), detailed = true).map { (v, e) -> itemOf(v, e) }
     }
 
-    suspend fun allShows(): List<MediaItem> = withContext(Dispatchers.IO) {
+    suspend fun allShows(): List<MediaItem> = onLibrary("Loading TV shows", { emptyList() }) {
         readShows(AllTvshowsLoader(context)).map { itemOf(it) }
     }
 
     // ---------------------------------------------------------------- search
 
-    suspend fun search(query: String): SearchResults = withContext(Dispatchers.IO) {
+    suspend fun search(query: String): SearchResults = onLibrary("Searching", { SearchResults(query.trim(), emptyList(), emptyList(), emptyList(), emptyList()) }) {
         val q = query.trim()
-        if (q.isEmpty()) return@withContext SearchResults(q, emptyList(), emptyList(), emptyList(), emptyList())
+        if (q.isEmpty()) return@onLibrary SearchResults(q, emptyList(), emptyList(), emptyList(), emptyList())
         val loader = SearchVideoLoader(context)
         loader.setQuery(q)
         val hits = readVideos(loader, detailed = false, limit = 300)

@@ -146,6 +146,9 @@ private fun TopBar(scrolled: Boolean, onTab: (Tab) -> Unit, actions: NovaActions
                 ) {
                     DropdownMenuItem(text = { Text("Settings", style = NovaType.BodyStrong, color = Nova.Text) }, onClick = { menuOpen = false; actions.openSettings() })
                     DropdownMenuItem(text = { Text("Classic Nova screens", style = NovaType.BodyStrong, color = Nova.Text) }, onClick = { menuOpen = false; actions.openClassic() })
+                    if (actions.hasProblemReport()) {
+                        DropdownMenuItem(text = { Text("Share problem report", style = NovaType.BodyStrong, color = Nova.Text) }, onClick = { menuOpen = false; actions.shareProblemReport() })
+                    }
                 }
             }
         }
