@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Nova Modern: Netflix-style player controls for phones.
+    Top bar = the ActionBar (title, lock, menu). This file = centre transport buttons and the
+    bottom panel (time, seek bar, action row). Every id PlayerController relies on is kept
+    (control_bar, pause, seek_progress, time_current, time, seek_state, format, fullscreen_cutouts,
+    play_touch_zone, osd_left/right, tv_menu_container, my_recycler_view); backward/forward and
+    central_play_icon are replaced by the centre buttons and are null-checked in the controller.
+-->
 <com.archos.mediacenter.video.player.PlayerControlsRelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:ads="http://schemas.android.com/apk/res-auto"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/playerControllers"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
     android:layoutDirection="ltr"
-    tools:ignore="HardcodedText" >
-
-    <!-- Control Bar (play/pause/seek) -->
+    tools:ignore="InconsistentLayout,HardcodedText,ContentDescription" >
 
     <FrameLayout
         android:id="@+id/tv_menu_container"
@@ -22,10 +27,10 @@
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:layout_gravity="top|start"
-            android:scrollbars="horizontal" >
-        </FrameLayout>
+            android:scrollbars="horizontal" />
     </FrameLayout>
 
+    <!-- volume bar (only shown on ChromeOS) -->
     <include
         android:layout_width="@dimen/player2014_bar_width"
         android:layout_height="fill_parent"
@@ -36,201 +41,233 @@
     <FrameLayout
         android:id="@+id/play_touch_zone"
         android:layout_width="match_parent"
-        android:layout_height="fill_parent"
-        android:scrollbars="horizontal"
+        android:layout_height="match_parent"
         android:layout_marginTop="?attr/actionBarSize"
-        android:layout_toEndOf="@+id/volume_bar"
         android:layout_above="@+id/control_bar"
-        android:layout_gravity="center"
-        android:visibility="invisible">
+        android:visibility="invisible" />
 
-    </FrameLayout>
-
-
-
-    <!-- Padding is programmatically for chromebook -->
+    <!-- centre: back 10 s, play/pause, forward 10 s (shown and hidden with the control bar) -->
     <LinearLayout
-        android:id="@+id/control_bar"
-        android:layout_width="fill_parent"
-        android:layout_height="@dimen/player2014_bar_width"
-        android:layout_alignParentBottom="true"
-        android:layout_marginEnd="0dip"
-        android:layout_marginBottom="0dp"
-        android:layout_toEndOf="@+id/volume_bar"
-        android:background="@drawable/player_bar_2014"
+        android:id="@+id/modern_center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone" >
 
         <ImageButton
-            android:id="@+id/pause"
-            style="@style/PlayerControlButton"
-            android:layout_marginEnd="@dimen/player_button_margin_half"
-            android:paddingStart="@dimen/player_button_padding_full"
-            android:paddingEnd="@dimen/player_button_padding_full"
+            android:id="@+id/modern_rewind"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:padding="12dp"
             android:scaleType="fitCenter"
-            android:adjustViewBounds="true"
-            ads:srcCompat="@drawable/video_play_selector"
-        android:contentDescription="@string/play_selection" />
+            android:background="@drawable/modern_borderless_ripple"
+            android:src="@drawable/modern_ic_rewind10"
+            android:contentDescription="Back 10 seconds" />
 
         <ImageButton
-            android:id="@+id/backward"
-            style="@style/PlayerControlButton"
-            android:layout_marginStart="@dimen/player_button_margin_half"
-            android:layout_marginEnd="@dimen/player_button_margin_half"
-            android:paddingStart="@dimen/player_button_padding_half"
-            android:paddingEnd="@dimen/player_button_padding_half"
+            android:id="@+id/pause"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginStart="44dp"
+            android:layout_marginEnd="44dp"
+            android:padding="22dp"
             android:scaleType="fitCenter"
-            android:adjustViewBounds="true"
-            ads:srcCompat="@drawable/video_backward_selector"
-        android:contentDescription="@null" />
+            android:background="@drawable/modern_play_circle"
+            android:src="@drawable/modern_ic_pause"
+            android:contentDescription="@string/play_selection" />
 
-        <RelativeLayout
-            android:layout_width="0dip"
-            android:layout_height="fill_parent"
-            android:layout_weight="1"
+        <ImageButton
+            android:id="@+id/modern_forward"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:padding="12dp"
+            android:scaleType="fitCenter"
+            android:background="@drawable/modern_borderless_ripple"
+            android:src="@drawable/modern_ic_forward10"
+            android:contentDescription="Forward 10 seconds" />
+    </LinearLayout>
+
+    <!-- bottom panel: time, seek bar, time left, then the action row -->
+    <LinearLayout
+        android:id="@+id/control_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="@drawable/modern_scrim_bottom"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="56dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone" >
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:layout_marginStart="@dimen/player_button_margin_half"
-            android:layout_marginEnd="@dimen/player_button_margin_half"
-            android:paddingStart="@dimen/player_button_padding_half"
-            android:paddingEnd="@dimen/player_button_padding_half">
-
-            <com.archos.mediacenter.utils.seekbar.ArchosProgressSlider
-                android:id="@+id/seek_progress"
-                style="@style/PlayerSliderHorizontal"
-                android:layout_width="fill_parent"
-                android:layout_height="wrap_content"
-                android:layout_alignParentTop="true"
-                android:paddingBottom="9dip"
-                android:paddingTop="20dip" />
+            android:orientation="horizontal" >
 
             <TextView
                 android:id="@+id/time_current"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentStart="true"
-                android:layout_alignParentTop="true"
-                android:paddingTop="0dip"
-                android:textSize="@dimen/player_time_text_size"
-                android:textStyle="bold" />
+                style="@style/NovaModernPlayerTime"
+                android:gravity="start" />
 
-            <ProgressBar
-                android:id="@+id/seek_state"
-                style="?android:attr/progressBarStyleSmallTitle"
-                android:layout_width="wrap_content"
+            <RelativeLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_alignParentTop="true"
-                android:layout_gravity="center"
-                android:layout_marginStart="5dip"
-                android:layout_marginTop="12dip"
-                android:layout_toEndOf="@id/time_current"
-                android:visibility="gone" />
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp" >
+
+                <com.archos.mediacenter.utils.seekbar.ArchosProgressSlider
+                    android:id="@+id/seek_progress"
+                    style="@style/PlayerSliderHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_centerVertical="true"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:thumb="@drawable/modern_seek_thumb"
+                    android:splitTrack="false" />
+
+                <ProgressBar
+                    android:id="@+id/seek_state"
+                    style="?android:attr/progressBarStyleSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerInParent="true"
+                    android:visibility="gone" />
+            </RelativeLayout>
 
             <TextView
                 android:id="@+id/time"
-                android:layout_width="wrap_content"
+                style="@style/NovaModernPlayerTime"
+                android:gravity="end" />
+        </LinearLayout>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fillViewport="true"
+            android:scrollbars="none"
+            android:overScrollMode="never" >
+
+            <LinearLayout
+                android:id="@+id/modern_actions"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:layout_alignParentTop="true"
-                android:paddingTop="0dip"
-                android:textSize="@dimen/player_time_text_size"
-                android:textStyle="bold"
-                tools:ignore="RelativeOverlap" />
-        </RelativeLayout>
+                android:gravity="center"
+                android:orientation="horizontal" >
 
-        <ImageButton
-            android:id="@+id/forward"
-            style="@style/PlayerControlButton"
-            android:layout_marginStart="@dimen/player_button_margin_half"
-            android:layout_marginEnd="@dimen/player_button_margin_half"
-            android:paddingStart="@dimen/player_button_padding_half"
-            android:paddingEnd="@dimen/player_button_padding_half"
-            android:scaleType="fitCenter"
-            android:adjustViewBounds="true"
-            ads:srcCompat="@drawable/video_forward_selector"
-        android:contentDescription="@null" />
-        
-        <ImageButton
-            android:id="@+id/fullscreen_cutouts"
-            style="@style/PlayerControlButton"
-            android:layout_marginStart="@dimen/player_button_margin_half"
-            android:paddingStart="@dimen/player_button_padding_full"
-            android:paddingEnd="@dimen/player_button_padding_full"
-            android:scaleType="fitCenter"
-            android:adjustViewBounds="true"
-            android:visibility="gone"
-            ads:srcCompat="@drawable/video_fullscreen_cutout_off"
-        android:contentDescription="@null" />
+                <TextView
+                    android:id="@+id/modern_audio"
+                    style="@style/NovaModernPlayerAction"
+                    android:drawableStart="@drawable/modern_ic_audio"
+                    android:text="Audio" />
 
-        <ImageButton
-            android:id="@+id/format"
-            style="@style/PlayerControlButton"
-            android:layout_marginStart="@dimen/player_button_margin_half"
-            android:paddingStart="@dimen/player_button_padding_full"
-            android:paddingEnd="@dimen/player_button_padding_full"
-            android:scaleType="fitCenter"
-            android:adjustViewBounds="true"
-            ads:srcCompat="@drawable/video_format_0"
-        android:contentDescription="@null" />
+                <TextView
+                    android:id="@+id/modern_subtitles"
+                    style="@style/NovaModernPlayerAction"
+                    android:drawableStart="@drawable/modern_ic_subtitles"
+                    android:text="Subtitles" />
+
+                <TextView
+                    android:id="@+id/modern_speed"
+                    style="@style/NovaModernPlayerAction"
+                    android:drawableStart="@drawable/modern_ic_speed"
+                    android:text="Speed (1×)" />
+
+                <TextView
+                    android:id="@+id/modern_episodes"
+                    style="@style/NovaModernPlayerAction"
+                    android:drawableStart="@drawable/modern_ic_episodes"
+                    android:text="Episodes"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/modern_next"
+                    style="@style/NovaModernPlayerAction"
+                    android:drawableStart="@drawable/modern_ic_next"
+                    android:text="Next episode"
+                    android:visibility="gone" />
+
+                <ImageButton
+                    android:id="@+id/fullscreen_cutouts"
+                    style="@style/PlayerControlButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:background="@drawable/modern_borderless_ripple"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/video_fullscreen_cutout_off" />
+
+                <ImageButton
+                    android:id="@+id/format"
+                    style="@style/PlayerControlButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:background="@drawable/modern_borderless_ripple"
+                    android:contentDescription="Zoom and aspect ratio"
+                    app:srcCompat="@drawable/video_format_0" />
+            </LinearLayout>
+        </HorizontalScrollView>
     </LinearLayout>
 
     <TextView android:id="@+id/osd_left"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:layout_marginBottom="84dp"
+        android:layout_marginTop="60dp"
+        android:layout_alignParentStart="true"
+        android:layout_marginStart="46dp"
         app:drawableStartCompat="@drawable/ic_volume"
         android:text="15"
         android:textColor="@color/white"
         android:textSize="20sp"
+        android:fontFamily="@font/manrope_bold"
         android:lineSpacingMultiplier="1.1"
         android:background="@drawable/rounded_rectangle"
         android:visibility="invisible"
-        android:layout_marginTop="60dp"
-        android:layout_alignParentStart="true"
-        android:layout_marginStart="46dp"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
         android:paddingTop="6sp"
-        android:paddingBottom="6sp"/>
+        android:paddingBottom="6sp" />
 
     <TextView android:id="@+id/osd_right"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:layout_marginBottom="84dp"
+        android:layout_marginTop="60dp"
+        android:layout_alignParentEnd="true"
+        android:layout_marginEnd="30dp"
         app:drawableStartCompat="@drawable/ic_brightness"
         android:text="15"
         android:textColor="@color/white"
         android:textSize="20sp"
+        android:fontFamily="@font/manrope_bold"
         android:lineSpacingMultiplier="1.1"
         android:background="@drawable/rounded_rectangle"
         android:visibility="invisible"
-        android:layout_marginTop="60dp"
-        android:layout_alignParentEnd="true"
-        android:layout_marginEnd="30dp"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
         android:paddingTop="6sp"
-        android:paddingBottom="6sp"/>
+        android:paddingBottom="6sp" />
 
     <include
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@+id/control_bar"
         layout="@layout/player_help_overlay" />
+
     <include
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_above="@+id/unlock_instructions"
         layout="@layout/unlock_instructions" />
-    <ImageView
-        android:id="@+id/central_play_icon"
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:layout_centerInParent="true"
-        android:src="@drawable/central_play_button"
-        android:visibility="gone"
-        android:elevation="10dp"
-        android:contentDescription="@null" />
 
 </com.archos.mediacenter.video.player.PlayerControlsRelativeLayout>

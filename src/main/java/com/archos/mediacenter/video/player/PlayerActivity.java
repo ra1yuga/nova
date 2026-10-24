@@ -180,7 +180,8 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
         SubtitleDelayPickerDialog.OnDelayChangeListener, AudioDelayPickerDialog.OnAudioDelayChangeListener,
         AudioSpeedPickerDialog.OnAudioSpeedChangeListener,
         DialogInterface.OnDismissListener, TrackInfoListener,
-        IndexHelper.Listener, PermissionChecker.PermissionListener, MiscUtils.CutoutMetricsSetter {
+        IndexHelper.Listener, PermissionChecker.PermissionListener, MiscUtils.CutoutMetricsSetter,
+        PlayerController.ModernControlsListener {
 
     private static final Logger log = LoggerFactory.getLogger(PlayerActivity.class);
 
@@ -826,6 +827,7 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
 
         mPlayerController = new PlayerController(mContext, getWindow(), (ViewGroup)mRootView, mSurfaceController, this, actionBar);
         mPlayerController.setVideoTitleEnabled(true);
+        mPlayerController.setModernControlsListener(this);
 
         mAudioInfoController = new TrackInfoController(mContext, getLayoutInflater(), menuAnchor, actionBar);
         mAudioInfoController.setListener(this);
@@ -841,6 +843,11 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
         mSubtitleInfoController = new TrackInfoController(mContext, getLayoutInflater(), menuAnchor, actionBar);
         mSubtitleInfoController.setListener(this);
         mSubtitleInfoController.setAlwayDisplay(true);
+        if (mPlayerController.isModernUi()) {
+            // Nova Modern: audio and subtitle pickers live in the bottom row instead of the top bar
+            mAudioInfoController.setMenuItemHidden(true);
+            mSubtitleInfoController.setMenuItemHidden(true);
+        }
         mResumeFromLast = false;
 
         mPlayer = new Player(mContext, getWindow(), mSurfaceController, false);
@@ -2820,6 +2827,62 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
         }
     }
 
+    // ------------------------------------------------------------------ Nova Modern
+
+    private void pushVideoTitle() {
+        if (mPlayerController == null) return;
+        String main = null;
+        String sub = null;
+        if (mVideoInfo != null && mVideoInfo.isScraped && !TextUtils.isEmpty(mMovieOrShowName)) {
+            main = mMovieOrShowName;
+            if (mVideoInfo.isShow && mVideoInfo.scraperSeasonNr >= 0 && mVideoInfo.scraperEpisodeNr >= 0) {
+                sub = "S" + mVideoInfo.scraperSeasonNr + ":E" + mVideoInfo.scraperEpisodeNr;
+                if (!TextUtils.isEmpty(mVideoInfo.scraperEpisodeName)) sub += " · " + mVideoInfo.scraperEpisodeName;
+            }
+        }
+        mPlayerController.setVideoTitle(mTitle, main, sub);
+    }
+
+    @Override
+    public void onModernAudio(View anchor) {
+        if (mAudioInfoController == null || !mAudioInfoController.showFrom(anchor)) {
+            Toast.makeText(this, "Audio tracks aren't ready yet", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onModernSubtitles(View anchor) {
+        if (mSubtitleInfoController == null || !mSubtitleInfoController.showFrom(anchor)) {
+            Toast.makeText(this, "Subtitles aren't ready yet", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onModernSpeed(View anchor) {
+        if (VideoPreferencesCommon.isAudioSpeedEnabled(mPreferences)) {
+            myShowDialog(DIALOG_AUDIO_SPEED);
+        } else {
+            Toast.makeText(this, "Speed can't change while audio passthrough is on", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    public void onModernEpisodes() {
+        long videoId = mVideoInfo != null ? mVideoInfo.id : -1;
+        Intent intent = new Intent(this, com.archos.mediacenter.video.modern.ModernActivity.class);
+        intent.putExtra(com.archos.mediacenter.video.modern.ModernActivity.EXTRA_SHOW_FOR_VIDEO_ID, videoId);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
+    }
+
+    @Override
+    public void onModernNext() {
+        if (PlayerService.sPlayerService != null) {
+            PlayerService.sPlayerService.playNextNow();
+        }
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         menu.clear();
@@ -2830,14 +2893,15 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
             //------------------------------------------------------------------
             // Add first the items related to the current video
             //------------------------------------------------------------------
+            final boolean modernUi = mPlayerController != null && mPlayerController.isModernUi();
             mInfoMenuItem = menu.add(MENU_FILE_ACTIONS_GROUP, MENU_INFO_ID, Menu.NONE, R.string.menu_info);
             if (mInfoMenuItem != null) {
-                mInfoMenuItem.setIcon(R.drawable.ic_menu_info).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+                mInfoMenuItem.setIcon(R.drawable.ic_menu_info).setShowAsAction(modernUi ? MenuItem.SHOW_AS_ACTION_NEVER : MenuItem.SHOW_AS_ACTION_ALWAYS);
             }
 
             mBookmarkMenuItem = menu.add(MENU_FILE_ACTIONS_GROUP, MENU_BOOKMARK_ID, Menu.NONE, R.string.menu_bookmark);
             if (mBookmarkMenuItem != null) {
-                mBookmarkMenuItem.setIcon(R.drawable.ic_menu_bookmark).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+                mBookmarkMenuItem.setIcon(R.drawable.ic_menu_bookmark).setShowAsAction(modernUi ? MenuItem.SHOW_AS_ACTION_NEVER : MenuItem.SHOW_AS_ACTION_ALWAYS);
             }
             mAudioInfoController.attachMenu(menu, R.drawable.ic_menu_languages);
             mSubtitleInfoController.attachMenu(menu, R.drawable.ic_menu_subtitles);
@@ -2845,12 +2909,15 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
             // Then add the global items related to the video player
             //------------------------------------------------------------------
 
-            menu.add(MENU_GLOBAL_ACTIONS_GROUP, MENU_LOCK_ID, Menu.NONE, R.string.menu_lock_player);
+            MenuItem lockItem = menu.add(MENU_GLOBAL_ACTIONS_GROUP, MENU_LOCK_ID, Menu.NONE, R.string.menu_lock_player);
+            if (modernUi && lockItem != null) {
+                lockItem.setIcon(R.drawable.modern_ic_lock).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+            }
             if (!isPluggedOnTv()) {
 
                 mBrightnessMenuItem = menu.add(MENU_GLOBAL_ACTIONS_GROUP, MENU_BRIGHTNESS_ID, Menu.NONE, R.string.menu_brightness_settings);
                 if (mBrightnessMenuItem != null) {
-                    mBrightnessMenuItem.setIcon(R.drawable.ic_menu_brightness).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+                    mBrightnessMenuItem.setIcon(R.drawable.ic_menu_brightness).setShowAsAction(modernUi ? MenuItem.SHOW_AS_ACTION_NEVER : MenuItem.SHOW_AS_ACTION_ALWAYS);
                 }
                 if (mPlayer!=null&&mPlayer.getEffectType()==VideoEffect.EFFECT_NONE) {
                     menuItem = menu.add(MENU_GLOBAL_ACTIONS_GROUP, MENU_LOCK_ROTATION_ID,
@@ -2955,6 +3022,11 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            // Nova Modern: back arrow in the top bar behaves like the system back gesture
+            getOnBackPressedDispatcher().onBackPressed();
+            return true;
+        }
         switch (item.getItemId()) {
             case MENU_LOCK_ID:
                 mPlayerController.lock();
@@ -3637,7 +3709,7 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
             }
         }
 
-        mPlayerController.setVideoTitle(mTitle);
+        pushVideoTitle();
         if (log.isDebugEnabled()) log.debug("setVideoInfo: mTitle {}, call postVideoInfoAndPrepared", mTitle);
         postVideoInfoAndPrepared();
     }
@@ -3721,7 +3793,7 @@ public class PlayerActivity extends AppCompatActivity implements PlayerControlle
 
         mPlayerController.setMediaPlayer(mPlayer);
 
-        mPlayerController.setVideoTitle(mTitle);
+        pushVideoTitle();
         //mVideoId = getIntent().getIntExtra("id", -1);
 
         mCling = intent.getBooleanExtra("cling", false);

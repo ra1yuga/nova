@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nova Modern: tablets and TVs keep Nova's own player layout -->
+<resources>
+    <bool name="nova_modern_player">false</bool>
+</resources>

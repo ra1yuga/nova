@@ -2006,6 +2006,49 @@ public class PlayerService extends Service implements Player.Listener, IndexHelp
         }
     }
 
+    // Nova Modern: "Next episode" button. Uses the next video Nova already picked for the current
+    // play mode; otherwise looks up the next episode (same rules as binge mode) right away.
+    @SuppressWarnings("deprecation") // getSerializableExtra: API 33+ branch uses typed form
+    public void playNextNow() {
+        if (mNextUri != null && !mNextUri.equals(mUri)) {
+            advanceTo(mNextUri, mNextVideoId);
+            return;
+        }
+        Video video = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                ? mIntent.getSerializableExtra(VIDEO, Video.class)
+                : (Video) mIntent.getSerializableExtra(VIDEO);
+        UpdateNextTask task = new UpdateNextTask(getContentResolver(), video, mUri, null, -1,
+                mIntent.getLongExtra(PLAYLIST_ID, -1));
+        task.setListener((uri, id) -> {
+            if (uri != null && !uri.equals(mUri)) {
+                advanceTo(uri, id);
+            } else {
+                Toast.makeText(getUiContext(), "No next episode found", Toast.LENGTH_SHORT).show();
+            }
+        });
+        task.execute(false, true);
+    }
+
+    private void advanceTo(Uri uri, long id) {
+        if (log.isDebugEnabled()) log.debug("advanceTo: {}", uri);
+        stopAndSaveVideoState();
+        if (mPlayerFrontend != null) {
+            mPlayerFrontend.onCompletion();
+        }
+        mUri = uri;
+        mStreamingUri = mUri;
+        mIntent.setData(mUri);
+        mIntent.putExtra(KEY_STREAMING_URI, mStreamingUri);
+        mIntent.putExtra(RESUME, RESUME_FROM_LAST_POS);
+        clearPositionExtras(mIntent);
+        mIntent.putExtra(LAUNCH_GENERATION, UUID.randomUUID().toString());
+        mVideoId = id;
+        mNextUri = null;
+        mNextVideoId = -1;
+        mPlaybackSession.reset(null, null);
+        onStart(mIntent);
+    }
+
     @Override
     public boolean onError(int errorCode, int errorQualCode, String msg) {
         if (log.isDebugEnabled()) log.debug("onError");

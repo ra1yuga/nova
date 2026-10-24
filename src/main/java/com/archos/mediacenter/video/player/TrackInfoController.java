@@ -412,7 +412,25 @@ public class TrackInfoController implements OnMenuItemClickListener, OnItemClick
     }
     private void setVisible() {
         if (mMenuItem != null)
-            mMenuItem.setVisible(getTrackCount()>1||mIsAlwaysDisplayed);
+            mMenuItem.setVisible(!mMenuItemHidden && (getTrackCount()>1||mIsAlwaysDisplayed));
+    }
+
+    // Nova Modern: the phone player opens these pickers from buttons in its bottom row,
+    // so the top-bar icons are hidden and the popup is anchored to the tapped button.
+    private boolean mMenuItemHidden = false;
+
+    public void setMenuItemHidden(boolean hidden) {
+        mMenuItemHidden = hidden;
+        setVisible();
+    }
+
+    public boolean showFrom(View anchor) {
+        if (mPopup == null || anchor == null) return false;
+        final ListPopupWindow popup = mPopup;
+        popup.setAnchorView(anchor);
+        popup.setOnDismissListener(() -> popup.setAnchorView(mAnchorView));
+        popup.show();
+        return true;
     }
 
     public boolean isExternal(int position) {

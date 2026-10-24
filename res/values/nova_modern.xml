@@ -25,4 +25,34 @@
     <color name="ui_accent_alpha50">#80B20710</color>
     <color name="ui_selector">#B20710</color>
     <color name="ui_text_accent">#FF5A62</color>
+
+    <!-- Nova Modern player: new control layout on phones (layout/ and layout-land/ player_controller_inside) -->
+    <bool name="nova_modern_player">true</bool>
+
+    <style name="NovaModernPlayerAction">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:drawablePadding">8dp</item>
+        <item name="android:textColor">#FFFFFFFF</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">@font/manrope_bold</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:background">@drawable/modern_borderless_ripple</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="NovaModernPlayerTime">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minWidth">52dp</item>
+        <item name="android:textColor">#FFFFFFFF</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">@font/manrope_bold</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:singleLine">true</item>
+    </style>
 </resources>

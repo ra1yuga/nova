@@ -47,6 +47,7 @@ import com.archos.mediacenter.video.modern.data.HomeData
 import com.archos.mediacenter.video.modern.data.Kind
 import com.archos.mediacenter.video.modern.data.LibraryRepository
 import com.archos.mediacenter.video.modern.data.MediaItem
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Everything the UI asks the hosting activity to do (play, open IMDb, mark watched...). */
 interface NovaActions {
@@ -91,9 +92,23 @@ class UiCache {
 val BottomBarHeight = 64.dp
 
 @Composable
-fun NovaApp(repo: LibraryRepository, actions: NovaActions) {
+fun NovaApp(
+    repo: LibraryRepository,
+    actions: NovaActions,
+    pendingShow: MutableStateFlow<Long?> = MutableStateFlow(null),
+) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     val stack = remember { mutableStateListOf<Route>() }
+
+    // the player's Episodes button asks for a show to be opened
+    LaunchedEffect(pendingShow) {
+        pendingShow.collect { showId ->
+            if (showId != null) {
+                if ((stack.lastOrNull() as? Route.Show)?.showId != showId) stack.add(Route.Show(showId))
+                pendingShow.value = null
+            }
+        }
+    }
     val cache = remember { UiCache() }
     val version by repo.version.collectAsStateWithLifecycle()
 

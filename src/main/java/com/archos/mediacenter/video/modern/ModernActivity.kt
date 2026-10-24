@@ -21,6 +21,7 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import com.archos.filecorelibrary.FileUtils
 import com.archos.filecorelibrary.MetaFile2
@@ -44,12 +45,16 @@ import com.archos.mediacenter.utils.trakt.Trakt
 import com.archos.mediaprovider.video.LoaderUtils
 import com.archos.mediaprovider.video.VideoStore
 import com.archos.mediascraper.AutoScrapeService
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class ModernActivity : AppCompatActivity(), NovaActions {
 
     private lateinit var permissionChecker: PermissionChecker
     private lateinit var repo: LibraryRepository
     private var resumedOnce = false
+    /** Show to open (from the player's Episodes button), consumed by the UI. */
+    private val pendingShow = MutableStateFlow<Long?>(null)
     private var showingCrash = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,11 +84,28 @@ class ModernActivity : AppCompatActivity(), NovaActions {
 
         AutoScrapeService.registerObserver(this)
         repo.start()
+        handleOpenShow(intent)
 
         setContent {
             NovaTheme {
-                NovaApp(repo = repo, actions = this)
+                NovaApp(repo = repo, actions = this, pendingShow = pendingShow)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (!showingCrash) handleOpenShow(intent)
+    }
+
+    private fun handleOpenShow(intent: Intent?) {
+        val videoId = intent?.getLongExtra(EXTRA_SHOW_FOR_VIDEO_ID, -1L) ?: -1L
+        if (videoId <= 0) return
+        intent?.removeExtra(EXTRA_SHOW_FOR_VIDEO_ID)
+        lifecycleScope.launch {
+            val showId = repo.showIdForVideo(videoId)
+            if (showId > 0) pendingShow.value = showId
         }
     }
 
@@ -294,6 +316,8 @@ class ModernActivity : AppCompatActivity(), NovaActions {
     companion object {
         private const val TAG = "NovaModern"
         const val PREF_MODERN_UI = "nova_modern_ui_enabled"
+        /** Long: a video id whose TV show should be opened (used by the player's Episodes button). */
+        const val EXTRA_SHOW_FOR_VIDEO_ID = "nova_modern_show_for_video_id"
         private const val PREF_RECENT_SEARCHES = "nova_modern_recent_searches"
 
         /** Phone/tablet launches go to the new interface unless it has been turned off. */

@@ -36,6 +36,13 @@ import android.os.Looper;
 import android.os.Message;
 import androidx.preference.PreferenceManager;
 import androidx.appcompat.app.ActionBar;
+import androidx.core.content.res.ResourcesCompat;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.TextUtils;
+import android.text.style.AbsoluteSizeSpan;
+import android.text.style.ForegroundColorSpan;
+import android.view.Gravity;
 
 import com.archos.mediacenter.video.leanback.overlay.Clock;
 
@@ -177,6 +184,22 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
 
     private TextView            mVideoTitle;
 
+    // Nova Modern: Netflix-style controls on phones (layout/ and layout-land/ player_controller_inside)
+    public interface ModernControlsListener {
+        void onModernAudio(View anchor);
+        void onModernSubtitles(View anchor);
+        void onModernSpeed(View anchor);
+        void onModernEpisodes();
+        void onModernNext();
+    }
+    private boolean             mModernUi = false;
+    private ModernControlsListener mModernListener;
+    private View                mModernCenter;
+    private TextView            mModernSpeed;
+    private TextView            mModernEpisodes;
+    private TextView            mModernNext;
+    private String              mTitleFull, mTitleMain, mTitleSub;
+
     private View                mControlBar;
     private View                mControlBar2;
     private ImageButton         mPauseButton;
@@ -313,6 +336,8 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
         mVideoTitle.setVisibility(View.GONE);
         mActionBar.setDisplayShowCustomEnabled(true);
         mActionBar.setCustomView(mVideoTitle);
+        mModernUi = mContext.getResources().getBoolean(R.bool.nova_modern_player) && !TVUtils.isTV(mContext);
+        if (mModernUi) styleModernTopBar();
         manualVisibilityChange=false;
 
         mSystemUiVisibility = 0;
@@ -375,6 +400,8 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
         mLastProgressTime = mLastProgress = 0;
         if (mControlBar != null)
             mControlBar.setVisibility(View.INVISIBLE);
+        if (mModernCenter != null)
+            mModernCenter.setVisibility(View.GONE);
         if (mVolumeBar != null) {
             mVolumeBar.setVisibility(View.GONE);
         }
@@ -493,6 +520,8 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
         if (mFormatButton != null) {
             mFormatButton.setOnClickListener(mFormatListener);
         }
+
+        if (isMainView) initModernControls(v);
 
         ImageButton fullscreenWithCutoutButton = (ImageButton) v.findViewById(R.id.fullscreen_cutouts);
         if (fullscreenWithCutoutButton != null) {
@@ -911,6 +940,9 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
             mControlBarShowing = show;
             adjustView();
             setVisibility(mControlBar, show, true);
+            if (mModernCenter != null) {
+                setVisibility(mModernCenter, show && !mIsLocked, false);
+            }
             if(mPlayPauseTouchZone!=null){
                 setVisibility(mPlayPauseTouchZone, show, false);
             }
@@ -928,6 +960,7 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
                 updateButtons();
                 updatePausePlay();
                 updateFormat();
+                updateModernButtons();
             }
 
             if (mOnControlBarVisibilityListener != null) {
@@ -1371,7 +1404,7 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
 
         if (mSeekWasPlaying || Player.sPlayer.isPlaying()) {
             if (log.isDebugEnabled()) log.debug("updatePausePlay: video is playing, hiding central play icon");
-            mPauseButton.setImageResource(R.drawable.video_pause_selector);
+            mPauseButton.setImageResource(mModernCenter != null ? R.drawable.modern_ic_pause : R.drawable.video_pause_selector);
             if(mPauseButton2!=null)
                 mPauseButton2.setImageResource(R.drawable.video_pause_selector);
             // Hide central play icon when playing
@@ -1382,7 +1415,7 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
             }
         } else {
             if (log.isDebugEnabled()) log.debug("updatePausePlay: video is paused, showing central play icon (locked={})", mIsLocked);
-            mPauseButton.setImageResource(R.drawable.video_play_selector);
+            mPauseButton.setImageResource(mModernCenter != null ? R.drawable.modern_ic_play : R.drawable.video_play_selector);
             if(mPauseButton2!=null)
                 mPauseButton2.setImageResource(R.drawable.video_play_selector);
             // Show central play icon when paused, but only if not locked
@@ -1473,9 +1506,132 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
     }
 
     public void setVideoTitle(String title) {
-        if (mVideoTitle != null && title != null && !title.isEmpty()) {
-            mVideoTitle.setText(title);
+        setVideoTitle(title, null, null);
+    }
+
+    /** Nova Modern: on phones the top bar shows the show/movie name with the episode on a second line. */
+    public void setVideoTitle(String title, String main, String sub) {
+        mTitleFull = title;
+        mTitleMain = main;
+        mTitleSub = sub;
+        applyVideoTitle();
+    }
+
+    private void applyVideoTitle() {
+        if (mVideoTitle == null) return;
+        if (mModernUi && !TextUtils.isEmpty(mTitleMain)) {
+            SpannableStringBuilder sb = new SpannableStringBuilder(mTitleMain);
+            if (!TextUtils.isEmpty(mTitleSub)) {
+                int start = sb.length();
+                sb.append('\n').append(mTitleSub);
+                sb.setSpan(new AbsoluteSizeSpan(13, true), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.setSpan(new ForegroundColorSpan(0xFFCFCBC3), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            mVideoTitle.setText(sb);
+        } else if (mTitleFull != null && !mTitleFull.isEmpty()) {
+            mVideoTitle.setText(mTitleFull);
         }
+    }
+
+    public void setModernControlsListener(ModernControlsListener listener) {
+        mModernListener = listener;
+    }
+
+    public boolean isModernUi() {
+        return mModernUi;
+    }
+
+    private int dp(int v) {
+        return Math.round(v * mContext.getResources().getDisplayMetrics().density);
+    }
+
+    private void styleModernTopBar() {
+        mActionBar.setBackgroundDrawable(getDrawable(mContext, R.drawable.modern_scrim_top));
+        mActionBar.setDisplayHomeAsUpEnabled(true);
+        mVideoTitle.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        mVideoTitle.setMinWidth(0);
+        mVideoTitle.setMinimumWidth(0);
+        mVideoTitle.setPadding(dp(4), 0, dp(8), 0);
+        mVideoTitle.setSingleLine(false);
+        mVideoTitle.setMaxLines(2);
+        mVideoTitle.setEllipsize(TextUtils.TruncateAt.END);
+        mVideoTitle.setTextSize(16);
+        try {
+            Typeface tf = ResourcesCompat.getFont(mContext, R.font.manrope_extrabold);
+            if (tf != null) mVideoTitle.setTypeface(tf);
+        } catch (Exception e) {
+            // keep the default font
+        }
+        mVideoTitle.setLayoutParams(new ActionBar.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START | Gravity.CENTER_VERTICAL));
+    }
+
+    private void initModernControls(View v) {
+        mModernCenter = v.findViewById(R.id.modern_center);
+        if (mModernCenter == null) return;
+        View rewind = v.findViewById(R.id.modern_rewind);
+        View forward = v.findViewById(R.id.modern_forward);
+        if (rewind != null) rewind.setOnClickListener(view -> modernSeek(-10000));
+        if (forward != null) forward.setOnClickListener(view -> modernSeek(10000));
+        View audio = v.findViewById(R.id.modern_audio);
+        View subtitles = v.findViewById(R.id.modern_subtitles);
+        mModernSpeed = v.findViewById(R.id.modern_speed);
+        mModernEpisodes = v.findViewById(R.id.modern_episodes);
+        mModernNext = v.findViewById(R.id.modern_next);
+        if (audio != null) audio.setOnClickListener(view -> {
+            sendFadeOut(SHOW_TIMEOUT);
+            if (mModernListener != null) mModernListener.onModernAudio(view);
+        });
+        if (subtitles != null) subtitles.setOnClickListener(view -> {
+            sendFadeOut(SHOW_TIMEOUT);
+            if (mModernListener != null) mModernListener.onModernSubtitles(view);
+        });
+        if (mModernSpeed != null) mModernSpeed.setOnClickListener(view -> {
+            if (mModernListener != null) mModernListener.onModernSpeed(view);
+        });
+        if (mModernEpisodes != null) mModernEpisodes.setOnClickListener(view -> {
+            if (mModernListener != null) mModernListener.onModernEpisodes();
+        });
+        if (mModernNext != null) mModernNext.setOnClickListener(view -> {
+            if (mModernListener != null) mModernListener.onModernNext();
+        });
+        applyVideoTitle();
+        updateModernButtons();
+    }
+
+    private void modernSeek(int deltaMs) {
+        if (mIsStopped || Player.sPlayer == null) return;
+        if (deltaMs < 0 ? !Player.sPlayer.canSeekBackward() : !Player.sPlayer.canSeekForward()) return;
+        int duration = Player.sPlayer.getDuration();
+        int target = Player.sPlayer.getCurrentPosition() + deltaMs;
+        if (target < 0) target = 0;
+        if (duration > 0 && target > duration - 1000) target = duration - 1000;
+        Player.sPlayer.seekTo(target);
+        setProgress();
+        sendFadeOut(SHOW_TIMEOUT);
+    }
+
+    /** Speed label, and Episodes / Next episode only for TV episodes. */
+    public void updateModernButtons() {
+        if (mModernCenter == null) return;
+        PlayerService service = PlayerService.sPlayerService;
+        if (mModernSpeed != null) {
+            boolean speedOk = VideoPreferencesCommon.isAudioSpeedEnabled(mContext);
+            float speed = (service != null && speedOk) ? service.getAudioSpeed() : 1.0f;
+            String value = (Math.abs(speed - Math.round(speed)) < 0.01f)
+                    ? String.valueOf(Math.round(speed))
+                    : String.format(Locale.US, "%.2f", speed).replaceAll("0+$", "");
+            mModernSpeed.setText("Speed (" + value + "×)");
+            mModernSpeed.setAlpha(speedOk ? 1f : 0.45f);
+        }
+        boolean isEpisode = false;
+        try {
+            isEpisode = service != null && service.getVideoInfo() != null && service.getVideoInfo().isShow;
+        } catch (Exception e) {
+            // no info yet
+        }
+        if (mModernEpisodes != null) mModernEpisodes.setVisibility(isEpisode ? View.VISIBLE : View.GONE);
+        if (mModernNext != null) mModernNext.setVisibility(isEpisode ? View.VISIBLE : View.GONE);
     }
 
     public void start() {

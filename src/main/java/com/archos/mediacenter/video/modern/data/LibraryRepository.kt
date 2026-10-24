@@ -553,6 +553,19 @@ class LibraryRepository(private val context: Context) {
         SearchResults(q, shows.values.take(12), movies, episodes, files)
     }
 
+    /** The TV show a video belongs to (internal show id), or -1. */
+    suspend fun showIdForVideo(videoId: Long): Long = onLibrary("Finding show for video $videoId", { -1L }) {
+        context.contentResolver.query(
+            VideoStore.Video.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(VideoStore.Video.VideoColumns.SCRAPER_SHOW_ID),
+            "_id=?",
+            arrayOf(videoId.toString()),
+            null,
+        )?.use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else -1L
+        } ?: -1L
+    }
+
     companion object {
         private const val TAG = "NovaModernRepo"
     }
