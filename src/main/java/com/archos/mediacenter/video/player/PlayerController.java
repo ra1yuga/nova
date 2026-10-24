@@ -1562,7 +1562,9 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
         } catch (Exception e) {
             // keep the default font
         }
-        mVideoTitle.setLayoutParams(new ActionBar.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+        // Re-attach through the ActionBar so it converts the params to the Toolbar's own type
+        // (setting ActionBar.LayoutParams directly on the view crashes Toolbar.onMeasure).
+        mActionBar.setCustomView(mVideoTitle, new ActionBar.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START | Gravity.CENTER_VERTICAL));
     }
 
