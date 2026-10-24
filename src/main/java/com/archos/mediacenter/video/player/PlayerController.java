@@ -28,6 +28,7 @@ import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.SystemClock;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
@@ -189,6 +190,12 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
     //private ImageButton         mFormatButton2;
     private TextView            mOsdLeftTextView;
     private TextView            mOsdRightTextView;
+    // Nova Modern: double-tap seeks add up (10s, 20s, 30s...) and holding the right side plays at 2x
+    private int mTapSeekAmountSec = 0;
+    private int mTapSeekDirection = 0;
+    private long mLastTapSeekTime = 0;
+    private boolean mHoldFastActive = false;
+    private float mHoldFastPreviousSpeed = 1.0f;
     private ImageView           mCentralPlayIcon;
     private float               scrollGestureVertical = 0f;
     private float               scrollGestureHorizontal = 0f;
@@ -1892,6 +1899,14 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
     @SuppressLint("ClickableViewAccessibility")
     public boolean onTouch(View v, MotionEvent event) {
         if (event == null) return false;
+        if (mHoldFastActive) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                endHoldFast();
+                gestureDetector.onTouchEvent(event);
+                return true;
+            }
+        }
         return gestureDetector.onTouchEvent(event);
     }
 
@@ -2069,7 +2084,61 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
     }
 
     @Override
-    public void onLongPress(MotionEvent e) {}
+    public void onLongPress(MotionEvent e) {
+        // Nova Modern: press and hold the right side of the video to play at 2x until released
+        if (e == null || mIsLocked || mControllerView == null) return;
+        if (Player.sPlayer == null || PlayerService.sPlayerService == null) return;
+        float viewWidth = (float) mControllerView.getWidth();
+        float viewHeight = (float) mControllerView.getHeight();
+        if (e.getX() <= viewWidth / 1.5f || e.getY() >= viewHeight * 0.75f) return;
+        if (!Player.sPlayer.isPlaying()) return;
+        if (!VideoPreferencesCommon.isAudioSpeedEnabled(mContext)) {
+            // speed changes are impossible while audio is passed through untouched to a receiver
+            if (mOsdRightTextView != null) {
+                mOsdRightTextView.setText("2x needs audio decoding (passthrough is on)");
+                mOsdRightTextView.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null);
+                mOsdRightTextView.setVisibility(View.VISIBLE);
+                hideOsdHandler.removeCallbacks(hideOsdRunnable);
+                hideOsdHandler.postDelayed(hideOsdRunnable, 1800);
+            }
+            return;
+        }
+        mHoldFastPreviousSpeed = PlayerService.sPlayerService.getAudioSpeed();
+        PlayerService.sPlayerService.setAudioSpeed(2.0f, true);
+        mHoldFastActive = true;
+        mControllerView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+        if (mOsdRightTextView != null) {
+            mOsdRightTextView.setText("2x ");
+            Drawable osdIcon = getDrawable(mContext, R.drawable.media_fast_forward);
+            mOsdRightTextView.setCompoundDrawablesWithIntrinsicBounds(null, null, osdIcon, null);
+            mOsdRightTextView.setVisibility(View.VISIBLE);
+            hideOsdHandler.removeCallbacks(hideOsdRunnable);
+        }
+    }
+
+    private void endHoldFast() {
+        if (!mHoldFastActive) return;
+        mHoldFastActive = false;
+        if (PlayerService.sPlayerService != null) {
+            PlayerService.sPlayerService.setAudioSpeed(mHoldFastPreviousSpeed, true);
+        }
+        if (mOsdRightTextView != null) {
+            hideOsdHandler.removeCallbacks(hideOsdRunnable);
+            hideOsdHandler.postDelayed(hideOsdRunnable, 150);
+        }
+    }
+
+    private int nextTapSeekAmount(int direction) {
+        long now = SystemClock.elapsedRealtime();
+        if (direction == mTapSeekDirection && now - mLastTapSeekTime < 1200) {
+            mTapSeekAmountSec += 10;
+        } else {
+            mTapSeekAmountSec = 10;
+        }
+        mTapSeekDirection = direction;
+        mLastTapSeekTime = now;
+        return mTapSeekAmountSec;
+    }
 
     @Override
     public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) { return false; }
@@ -2103,12 +2172,12 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
                     // Top 75% left: fast rewind
                     if (Player.sPlayer.canSeekBackward() && mSeekKeyDirection != -1) {
                         if (mOsdLeftTextView != null) {
-                            mOsdLeftTextView.setText("");
+                            mOsdLeftTextView.setText(" " + nextTapSeekAmount(-1) + "s");
                             Drawable osdIcon = getDrawable(mContext, R.drawable.media_fast_rewind);
                             mOsdLeftTextView.setCompoundDrawablesWithIntrinsicBounds(osdIcon, null, null, null);
                             mOsdLeftTextView.setVisibility(View.VISIBLE);
                             hideOsdHandler.removeCallbacks(hideOsdRunnable);
-                            hideOsdHandler.postDelayed(hideOsdRunnable, 300);
+                            hideOsdHandler.postDelayed(hideOsdRunnable, 700);
                         }
                         Player.sPlayer.seekTo(Player.sPlayer.getCurrentPosition() - 10000);
                     }
@@ -2124,12 +2193,12 @@ public class PlayerController implements View.OnTouchListener, OnGenericMotionLi
                     // Top 75% right: fast forward
                     if (Player.sPlayer.canSeekBackward() && mSeekKeyDirection != 1) {
                         if (mOsdRightTextView != null) {
-                            mOsdRightTextView.setText("");
+                            mOsdRightTextView.setText(nextTapSeekAmount(1) + "s ");
                             Drawable osdIcon = getDrawable(mContext, R.drawable.media_fast_forward);
-                            mOsdRightTextView.setCompoundDrawablesWithIntrinsicBounds(osdIcon, null, null, null);
+                            mOsdRightTextView.setCompoundDrawablesWithIntrinsicBounds(null, null, osdIcon, null);
                             mOsdRightTextView.setVisibility(View.VISIBLE);
                             hideOsdHandler.removeCallbacks(hideOsdRunnable);
-                            hideOsdHandler.postDelayed(hideOsdRunnable, 300);
+                            hideOsdHandler.postDelayed(hideOsdRunnable, 700);
                         }
                         Player.sPlayer.seekTo(Player.sPlayer.getCurrentPosition() + 10000);
                     }

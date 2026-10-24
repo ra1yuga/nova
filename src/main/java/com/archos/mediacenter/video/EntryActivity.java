@@ -57,6 +57,9 @@ public class EntryActivity extends AppCompatActivity {
         Class activityToLaunch = null;
         if (UiChoiceDialog.applicationIsInLeanbackMode(this)) {
             activityToLaunch = MainActivityLeanback.class;
+        } else if (com.archos.mediacenter.video.modern.ModernActivity.isEnabled(this)) {
+            // Nova Modern: Compose browsing UI for phones
+            activityToLaunch = com.archos.mediacenter.video.modern.ModernActivity.class;
         } else {
             activityToLaunch = MainActivity.class;
         }

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nova Modern: resources for the Compose browsing UI -->
+<resources>
+    <string name="nova_modern_app_name" translatable="false">Nova Modern</string>
+
+    <style name="NovaModernTheme" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="colorPrimary">@color/nova_modern_accent</item>
+        <item name="colorAccent">@color/nova_modern_accent</item>
+    </style>
+
+    <color name="nova_modern_accent">#E50914</color>
+
+    <!-- Override Nova's central accent palette (defined in MediaLib) so the player's seek bar,
+         progress bars and the classic screens use the same red as the new interface -->
+    <color name="ui_accent_primary">#E50914</color>
+    <color name="ui_accent_secondary">#E50914</color>
+    <color name="ui_accent_dark">#5C0408</color>
+    <color name="ui_accent_medium">#B20710</color>
+    <color name="ui_accent_light">#FF8A8F</color>
+    <color name="ui_accent_alpha50">#80B20710</color>
+    <color name="ui_selector">#B20710</color>
+    <color name="ui_text_accent">#FF5A62</color>
+</resources>

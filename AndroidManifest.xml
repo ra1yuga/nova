@@ -107,7 +107,7 @@
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/nova_banner"
-        android:label="@string/nova"
+        android:label="@string/nova_modern_app_name"
         android:largeHeap="true"
         android:requestLegacyExternalStorage="true"
         android:localeConfig="@xml/locales_config"
@@ -133,6 +133,16 @@
             android:launchMode="singleTask"
             android:taskAffinity="archos.task.video"
             android:theme="@style/ArchosThemeLauncher" />
+
+        <!-- Nova Modern: Compose browsing UI on top of Nova's library, scrapers and player -->
+        <activity
+            android:name=".modern.ModernActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="archos.task.video"
+            android:theme="@style/NovaModernTheme"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".browser.MainActivity"
@@ -198,7 +208,7 @@
              query the suggestion cursor. -->
         <provider
             android:name="com.archos.mediacenter.video.browser.SearchProviderVideo"
-            android:authorities="browser.SearchProviderVideocommunity"
+            android:authorities="browser.SearchProviderVideomodern"
             android:exported="true"
             android:readPermission="android.permission.GLOBAL_SEARCH" />
 
@@ -1248,7 +1258,7 @@
         <!-- ContentProvider for media -->
         <provider
             android:name="com.archos.mediaprovider.video.VideoProvider"
-            android:authorities="com.archos.media.videocommunity;com.archos.media.scrapercommunity"
+            android:authorities="com.archos.media.videomodern;com.archos.media.scrapermodern"
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
         <!-- BroadcastReceiver to trigger database import -->
