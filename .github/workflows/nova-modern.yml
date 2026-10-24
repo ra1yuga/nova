@@ -79,9 +79,10 @@ jobs:
 
       - name: Build the APK
         run: |
+          set -o pipefail
           cd nova/Video
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace assembleNoamazonRelease -x lintNoamazonRelease
+          ./gradlew --no-daemon --stacktrace assembleNoamazonRelease -x lintNoamazonRelease 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
 
       - name: Collect the APK
         id: apk
@@ -110,3 +111,19 @@ jobs:
             --title "Nova Modern build ${{ github.run_number }}" \
             --notes "Nova Modern for arm64 phones (OnePlus 13). Built from ${SHORT}. Install NovaModern-arm64.apk; it installs next to the official Nova app." \
             --latest
+
+      - name: Save the build log to the ci-logs branch (read by Claude when a build fails)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f build.log ] || echo "no build log (failed before the Gradle step)" > build.log
+          mkdir -p logrepo && cd logrepo
+          git init -q
+          git config user.name "nova-modern-ci"
+          git config user.email "nova-modern-ci@users.noreply.github.com"
+          grep -nE "^e: |error:|FAILED|What went wrong|Exception|^\s+at " ../build.log | head -400 > errors.txt || true
+          tail -n 600 ../build.log > build-tail.log
+          echo "run ${{ github.run_number }} ${{ github.sha }}" > README.txt
+          git add -A && git commit -q -m "Build ${{ github.run_number }} log"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:refs/heads/ci-logs
